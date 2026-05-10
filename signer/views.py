@@ -1,4 +1,5 @@
 import io
+import numpy as np
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.core.files.base import ContentFile
@@ -9,6 +10,36 @@ from PIL import Image
 
 from .models import Document, Signature
 from .forms import DocumentUploadForm
+
+
+def remove_signature_background(image_file, threshold=200):
+    """
+    Remove white/light background from a signature image.
+    Converts light pixels (above threshold brightness) to transparent.
+    Returns a ContentFile containing the processed PNG with transparency.
+    """
+    img = Image.open(image_file).convert('RGBA')
+    data = np.array(img)
+
+    # Calculate brightness from RGB channels
+    # Pixels where R, G, and B are all above the threshold are considered background
+    r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+    is_light = (r > threshold) & (g > threshold) & (b > threshold)
+
+    # Set alpha to 0 for light (background) pixels
+    data[:, :, 3] = np.where(is_light, 0, a)
+
+    # Create the processed image
+    result = Image.fromarray(data, 'RGBA')
+
+    # Save to buffer
+    buffer = io.BytesIO()
+    result.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    # Return as a Django ContentFile
+    original_name = getattr(image_file, 'name', 'signature.png')
+    return ContentFile(buffer.read(), name=original_name)
 
 def upload_document(request):
     if request.method == 'POST':
@@ -25,67 +56,81 @@ def sign_document(request, doc_id):
     doc = get_object_or_404(Document, id=doc_id)
     return render(request, 'signer/sign.html', {'doc': doc})
 
+import json
+
 def apply_signature(request):
     """
-    API endpoint to apply the signature.
+    API endpoint to apply multiple signatures.
     Expects POST parameters:
     - doc_id: UUID
-    - signature_file: file (PNG)
-    - x: float (x coordinate in PDF points)
-    - y: float (y coordinate in PDF points)
-    - width: float (width in PDF points)
-    - height: float (height in PDF points)
-    - page_num: int (1-based index)
+    - signatures_data: JSON string of array [{id, page_num, x, y, width, height}]
+    - file_<sig_id>: PNG file for each signature
     """
     if request.method == 'POST':
         doc_id = request.POST.get('doc_id')
-        x = float(request.POST.get('x', 0))
-        y = float(request.POST.get('y', 0))
-        width = float(request.POST.get('width', 100))
-        height = float(request.POST.get('height', 50))
-        page_num = int(request.POST.get('page_num', 1)) - 1 # 0-based for pypdf
-        signature_file = request.FILES.get('signature_file')
+        signatures_data_str = request.POST.get('signatures_data')
 
-        if not doc_id or not signature_file:
-            return JsonResponse({'error': 'Missing document ID or signature file'}, status=400)
-
-        doc = get_object_or_404(Document, id=doc_id)
-        
-        # Save signature to DB
-        sig = Signature.objects.create(image=signature_file)
+        if not doc_id or not signatures_data_str:
+            return JsonResponse({'error': 'Missing document ID or signature data'}, status=400)
 
         try:
+            signatures_data = json.loads(signatures_data_str)
+            doc = get_object_or_404(Document, id=doc_id)
+            
             # 1. Read existing PDF
             existing_pdf = PdfReader(doc.original_pdf.path)
             output = PdfWriter()
 
-            # The page we want to sign
-            target_page = existing_pdf.pages[page_num]
-            # Get dimensions (media box usually has coordinates from 0,0)
-            page_width = float(target_page.mediabox.width)
-            page_height = float(target_page.mediabox.height)
-
-            # 2. Create the overlay PDF in memory
-            packet = io.BytesIO()
-            # reportlab defaults to bottom-left origin
-            can = canvas.Canvas(packet, pagesize=(page_width, page_height))
+            # We need to create an overlay for each page that has signatures
+            # Map page_num (1-based) to a list of signature tasks
+            page_overlays = {}
             
-            # Using ImageReader to handle image transparency correctly
-            img_reader = ImageReader(sig.image.path)
-            
-            # PDF coordinates: y is from bottom in reportlab, but JS might send y from top.
-            # Assuming the JS sends (x,y) from bottom-left (standard PDF coordinates)
-            can.drawImage(img_reader, x, y, width=width, height=height, mask='auto')
-            can.save()
+            for sig in signatures_data:
+                page_num = int(sig['page_num']) - 1 # 0-based for pypdf
+                file_key = f"file_{sig['id']}"
+                sig_file = request.FILES.get(file_key)
+                
+                if not sig_file:
+                    continue
+                
+                # Remove background from signature image
+                processed_file = remove_signature_background(sig_file)
+                
+                # Save signature to DB
+                sig_record = Signature.objects.create(image=processed_file)
+                
+                if page_num not in page_overlays:
+                    page_overlays[page_num] = []
+                    
+                page_overlays[page_num].append({
+                    'record': sig_record,
+                    'x': float(sig['x']),
+                    'y': float(sig['y']),
+                    'width': float(sig['width']),
+                    'height': float(sig['height'])
+                })
 
-            packet.seek(0)
-            new_pdf = PdfReader(packet)
-
-            # 3. Merge pages
+            # Process each page
             for i in range(len(existing_pdf.pages)):
                 page = existing_pdf.pages[i]
-                if i == page_num:
+                
+                if i in page_overlays:
+                    page_width = float(page.mediabox.width)
+                    page_height = float(page.mediabox.height)
+                    
+                    packet = io.BytesIO()
+                    can = canvas.Canvas(packet, pagesize=(page_width, page_height))
+                    
+                    for sig_task in page_overlays[i]:
+                        img_reader = ImageReader(sig_task['record'].image.path)
+                        can.drawImage(img_reader, sig_task['x'], sig_task['y'], 
+                                      width=sig_task['width'], height=sig_task['height'], mask='auto')
+                    
+                    can.save()
+                    packet.seek(0)
+                    new_pdf = PdfReader(packet)
                     page.merge_page(new_pdf.pages[0])
+                    
                 output.add_page(page)
 
             # 4. Save signed PDF
@@ -103,6 +148,8 @@ def apply_signature(request):
             })
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid request'}, status=400)

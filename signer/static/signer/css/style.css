@@ -263,6 +263,87 @@ body {
     cursor: se-resize;
 }
 
+.delete-sig-btn {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 20px;
+    height: 20px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+.delete-sig-btn:hover {
+    background: #b91c1c;
+    transform: scale(1.1);
+}
+
+/* Drawing Controls */
+.drawing-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.color-options {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.color-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.color-btn:hover {
+    transform: scale(1.1);
+}
+.color-btn.active {
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+}
+
+.slider {
+    -webkit-appearance: none;
+    width: 100px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+}
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+}
+
 /* Tools Panel */
 .tools-panel {
     padding: 1.5rem;
