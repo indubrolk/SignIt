@@ -1,0 +1,81 @@
+{% extends 'signer/base.html' %}
+
+{% block extra_head %}
+<!-- PDF.js via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/interact.js/1.10.11/interact.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="workspace">
+    <!-- Left: PDF Preview -->
+    <div class="pdf-panel glassmorphic">
+        <div class="pdf-toolbar">
+            <button class="btn btn-icon" id="prev-page" disabled>&larr;</button>
+            <span class="page-info">Page <span id="page-num">1</span> of <span id="page-count">--</span></span>
+            <button class="btn btn-icon" id="next-page" disabled>&rarr;</button>
+        </div>
+        <div class="pdf-container-wrapper" id="pdf-wrapper">
+            <div id="pdf-container">
+                <canvas id="pdf-render"></canvas>
+                <div id="signature-overlay" class="draggable-signature" style="display: none;">
+                    <img id="signature-img" src="" alt="Signature">
+                    <div class="resize-handle"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Tools Panel -->
+    <div class="tools-panel glassmorphic">
+        <h2>Sign Document</h2>
+        <p class="subtitle">Upload or draw your signature</p>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="upload">Upload PNG</button>
+            <button class="tab-btn" data-tab="draw">Draw</button>
+        </div>
+
+        <div class="tab-content active" id="tab-upload">
+            <input type="file" id="sig-upload" accept="image/png" class="file-input">
+            <label for="sig-upload" class="upload-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Upload PNG Signature
+            </label>
+        </div>
+
+        <div class="tab-content" id="tab-draw">
+            <div class="canvas-container">
+                <canvas id="draw-canvas" width="300" height="150"></canvas>
+            </div>
+            <div class="draw-tools">
+                <button class="btn btn-secondary btn-sm" id="clear-canvas">Clear</button>
+                <button class="btn btn-primary btn-sm" id="use-drawn-sig">Use Signature</button>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="action-section">
+            <p class="help-text">Drag to position. Use bottom right corner to resize.</p>
+            <button class="btn btn-primary btn-block btn-lg" id="apply-btn" disabled>Apply Signature</button>
+        </div>
+        
+        <div id="success-area" style="display: none; margin-top: 20px;">
+            <div class="success-msg">✓ Signature applied successfully!</div>
+            <a href="#" id="download-btn" class="btn btn-success btn-block" download>Download Signed PDF</a>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JS -->
+<div id="doc-data" 
+     data-url="{{ doc.original_pdf.url }}" 
+     data-id="{{ doc.id }}"
+     data-csrf="{{ csrf_token }}">
+</div>
+
+{% load static %}
+<script src="{% static 'signer/js/signer.js' %}"></script>
+{% endblock %}
