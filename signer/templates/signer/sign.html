@@ -86,7 +86,8 @@
 </div>
 
 <!-- Hidden data for JS -->
-<div id="doc-data" data-url="{{ doc.original_pdf.url }}" data-id="{{ doc.id }}" data-csrf="{{ csrf_token }}">
+<div id="doc-data" data-url="{% url 'view_original_pdf' doc_id=doc.id %}" data-id="{{ doc.id }}"
+    data-csrf="{{ csrf_token }}">
 </div>
 
 {% load static %}

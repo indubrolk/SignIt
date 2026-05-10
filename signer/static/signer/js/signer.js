@@ -398,8 +398,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(data => {
                     if (data.success) {
                         document.getElementById('success-area').style.display = 'block';
-                        const downloadUrl = data.download_url || data.signed_url;
-                        document.getElementById('download-btn').href = downloadUrl;
+                        const downloadUrl = data.download_url;
+                        if (downloadUrl) {
+                            document.getElementById('download-btn').href = downloadUrl;
+                        }
                         applyBtn.textContent = 'Signatures Applied';
 
                         // Trigger download via normal navigation to avoid opening a file picker.

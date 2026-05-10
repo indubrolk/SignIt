@@ -2,7 +2,7 @@ import io
 import os
 import numpy as np
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, FileResponse
+from django.http import JsonResponse, FileResponse, Http404
 from django.urls import reverse
 from django.core.files.base import ContentFile
 from pypdf import PdfReader, PdfWriter
@@ -12,6 +12,19 @@ from PIL import Image
 
 from .models import Document, Signature
 from .forms import DocumentUploadForm
+
+
+def _allow_doc_access(request, doc_id):
+    allowed = request.session.get('allowed_docs', [])
+    doc_id_str = str(doc_id)
+    if doc_id_str not in allowed:
+        allowed.append(doc_id_str)
+        request.session['allowed_docs'] = allowed
+
+
+def _has_doc_access(request, doc_id):
+    allowed = request.session.get('allowed_docs', [])
+    return str(doc_id) in allowed
 
 
 def remove_signature_background(image_file, threshold=200):
@@ -48,6 +61,7 @@ def upload_document(request):
         form = DocumentUploadForm(request.POST, request.FILES)
         if form.is_valid():
             doc = form.save()
+            _allow_doc_access(request, doc.id)
             return redirect('sign_document', doc_id=doc.id)
     else:
         form = DocumentUploadForm()
@@ -55,6 +69,8 @@ def upload_document(request):
     return render(request, 'signer/upload.html', {'form': form})
 
 def sign_document(request, doc_id):
+    if not _has_doc_access(request, doc_id):
+        raise Http404()
     doc = get_object_or_404(Document, id=doc_id)
     return render(request, 'signer/sign.html', {'doc': doc})
 
@@ -77,6 +93,8 @@ def apply_signature(request):
 
         try:
             signatures_data = json.loads(signatures_data_str)
+            if not _has_doc_access(request, doc_id):
+                return JsonResponse({'error': 'Not found'}, status=404)
             doc = get_object_or_404(Document, id=doc_id)
             
             # 1. Read existing PDF
@@ -146,7 +164,6 @@ def apply_signature(request):
 
             return JsonResponse({
                 'success': True,
-                'signed_url': doc.signed_pdf.url,
                 'download_url': reverse('download_signed_pdf', kwargs={'doc_id': doc.id})
             })
             
@@ -159,6 +176,8 @@ def apply_signature(request):
 
 
 def download_signed_pdf(request, doc_id):
+    if not _has_doc_access(request, doc_id):
+        raise Http404()
     doc = get_object_or_404(Document, id=doc_id)
     if not doc.signed_pdf:
         return JsonResponse({'error': 'Signed PDF not found'}, status=404)
@@ -167,4 +186,15 @@ def download_signed_pdf(request, doc_id):
     filename = os.path.basename(doc.signed_pdf.name)
     response = FileResponse(file_handle, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def view_original_pdf(request, doc_id):
+    if not _has_doc_access(request, doc_id):
+        raise Http404()
+    doc = get_object_or_404(Document, id=doc_id)
+    file_handle = doc.original_pdf.open('rb')
+    filename = os.path.basename(doc.original_pdf.name)
+    response = FileResponse(file_handle, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response
