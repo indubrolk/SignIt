@@ -37,7 +37,11 @@
         <div class="tab-content active" id="tab-upload">
             <input type="file" id="sig-upload" accept="image/png" class="file-input">
             <label for="sig-upload" class="upload-btn">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
                 Upload PNG Signature
             </label>
         </div>
@@ -70,9 +74,10 @@
 
         <div class="action-section">
             <p class="help-text">Drag to position. Use bottom right corner to resize.</p>
+            <button class="btn btn-secondary btn-block" id="confirm-btn" disabled>Confirm Signature</button>
             <button class="btn btn-primary btn-block btn-lg" id="apply-btn" disabled>Apply Signature</button>
         </div>
-        
+
         <div id="success-area" style="display: none; margin-top: 20px;">
             <div class="success-msg">✓ Signature applied successfully!</div>
             <a href="#" id="download-btn" class="btn btn-success btn-block" download>Download Signed PDF</a>
@@ -81,10 +86,7 @@
 </div>
 
 <!-- Hidden data for JS -->
-<div id="doc-data" 
-     data-url="{{ doc.original_pdf.url }}" 
-     data-id="{{ doc.id }}"
-     data-csrf="{{ csrf_token }}">
+<div id="doc-data" data-url="{{ doc.original_pdf.url }}" data-id="{{ doc.id }}" data-csrf="{{ csrf_token }}">
 </div>
 
 {% load static %}

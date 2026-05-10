@@ -5,4 +5,5 @@ urlpatterns = [
     path('', views.upload_document, name='upload_document'),
     path('sign/<uuid:doc_id>/', views.sign_document, name='sign_document'),
     path('api/apply-signature/', views.apply_signature, name='apply_signature'),
+    path('download/signed/<uuid:doc_id>/', views.download_signed_pdf, name='download_signed_pdf'),
 ]

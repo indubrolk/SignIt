@@ -1,7 +1,9 @@
 import io
+import os
 import numpy as np
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
+from django.urls import reverse
 from django.core.files.base import ContentFile
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
@@ -143,8 +145,9 @@ def apply_signature(request):
             doc.save()
 
             return JsonResponse({
-                'success': True, 
-                'signed_url': doc.signed_pdf.url
+                'success': True,
+                'signed_url': doc.signed_pdf.url,
+                'download_url': reverse('download_signed_pdf', kwargs={'doc_id': doc.id})
             })
             
         except Exception as e:
@@ -153,3 +156,15 @@ def apply_signature(request):
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid request'}, status=400)
+
+
+def download_signed_pdf(request, doc_id):
+    doc = get_object_or_404(Document, id=doc_id)
+    if not doc.signed_pdf:
+        return JsonResponse({'error': 'Signed PDF not found'}, status=404)
+
+    file_handle = doc.signed_pdf.open('rb')
+    filename = os.path.basename(doc.signed_pdf.name)
+    response = FileResponse(file_handle, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
