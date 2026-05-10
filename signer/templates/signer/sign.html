@@ -19,10 +19,7 @@
         <div class="pdf-container-wrapper" id="pdf-wrapper">
             <div id="pdf-container">
                 <canvas id="pdf-render"></canvas>
-                <div id="signature-overlay" class="draggable-signature" style="display: none;">
-                    <img id="signature-img" src="" alt="Signature">
-                    <div class="resize-handle"></div>
-                </div>
+                <!-- Signatures will be spawned here dynamically -->
             </div>
         </div>
     </div>
@@ -46,12 +43,26 @@
         </div>
 
         <div class="tab-content" id="tab-draw">
+            <div class="drawing-controls">
+                <div class="control-group">
+                    <label>Color:</label>
+                    <div class="color-options">
+                        <button class="color-btn active" data-color="#000000" style="background: #000;"></button>
+                        <button class="color-btn" data-color="#2563eb" style="background: #2563eb;"></button>
+                        <button class="color-btn" data-color="#dc2626" style="background: #dc2626;"></button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Thickness: <span id="thickness-val">3</span>px</label>
+                    <input type="range" id="draw-thickness" min="1" max="10" value="3" class="slider">
+                </div>
+            </div>
             <div class="canvas-container">
                 <canvas id="draw-canvas" width="300" height="150"></canvas>
             </div>
             <div class="draw-tools">
                 <button class="btn btn-secondary btn-sm" id="clear-canvas">Clear</button>
-                <button class="btn btn-primary btn-sm" id="use-drawn-sig">Use Signature</button>
+                <button class="btn btn-primary btn-sm" id="add-drawn-sig">Add to Document</button>
             </div>
         </div>
 

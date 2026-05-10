@@ -11,10 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const scale = 1.5;
     const canvas = document.getElementById('pdf-render');
     const ctx = canvas.getContext('2d');
+    const pdfContainer = document.getElementById('pdf-container');
 
     // UI Elements
-    const sigOverlay = document.getElementById('signature-overlay');
-    const sigImg = document.getElementById('signature-img');
     const applyBtn = document.getElementById('apply-btn');
     
     // PDF rendering
@@ -90,13 +89,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const drawCanvas = document.getElementById('draw-canvas');
     const drawCtx = drawCanvas.getContext('2d');
     let isDrawing = false;
+    let drawColor = '#000000';
+    let drawThickness = 3;
 
     // Set white background for drawing canvas so it's not transparent
     drawCtx.fillStyle = 'transparent';
     drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
-    drawCtx.lineWidth = 3;
-    drawCtx.lineCap = 'round';
-    drawCtx.strokeStyle = '#000';
+    
+    function updateDrawContext() {
+        drawCtx.lineWidth = drawThickness;
+        drawCtx.lineCap = 'round';
+        drawCtx.strokeStyle = drawColor;
+    }
+    updateDrawContext();
+
+    // Drawing Controls
+    document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            drawColor = e.target.dataset.color;
+            updateDrawContext();
+        });
+    });
+
+    const thicknessSlider = document.getElementById('draw-thickness');
+    const thicknessVal = document.getElementById('thickness-val');
+    thicknessSlider.addEventListener('input', (e) => {
+        drawThickness = e.target.value;
+        thicknessVal.textContent = drawThickness;
+        updateDrawContext();
+    });
 
     function startPosition(e) {
         isDrawing = true;
@@ -122,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     drawCanvas.addEventListener('mousedown', startPosition);
     drawCanvas.addEventListener('mouseup', endPosition);
     drawCanvas.addEventListener('mousemove', draw);
+    drawCanvas.addEventListener('mouseout', endPosition);
     
     drawCanvas.addEventListener('touchstart', startPosition, {passive: true});
     drawCanvas.addEventListener('touchend', endPosition);
@@ -134,57 +158,91 @@ document.addEventListener('DOMContentLoaded', () => {
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
     });
 
-    // Upload PNG Logic
-    let currentSignatureFile = null;
+    // Signature Management
+    const signatureFiles = new Map();
+    let sigCounter = 0;
 
+    function addSignatureToCanvas(file, dataUrl) {
+        sigCounter++;
+        const sigId = `sig_${sigCounter}`;
+        signatureFiles.set(sigId, file);
+
+        const sigWrapper = document.createElement('div');
+        sigWrapper.className = 'draggable-signature';
+        sigWrapper.id = sigId;
+        sigWrapper.dataset.pageNum = pageNum; // Track which page it was placed on
+        
+        // Initial position
+        sigWrapper.style.transform = 'translate(-50%, -50%)';
+        sigWrapper.dataset.x = 0;
+        sigWrapper.dataset.y = 0;
+        sigWrapper.style.width = '150px';
+        sigWrapper.style.height = 'auto';
+
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.className = 'signature-img';
+
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-sig-btn';
+        deleteBtn.innerHTML = '&times;';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            signatureFiles.delete(sigId);
+            sigWrapper.remove();
+            if (signatureFiles.size === 0) {
+                applyBtn.disabled = true;
+            }
+        };
+
+        sigWrapper.appendChild(deleteBtn);
+        sigWrapper.appendChild(img);
+        sigWrapper.appendChild(resizeHandle);
+        pdfContainer.appendChild(sigWrapper);
+
+        applyBtn.disabled = false;
+    }
+
+    // Upload PNG Logic
     document.getElementById('sig-upload').addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
-            currentSignatureFile = e.target.files[0];
+            const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = function(e) {
-                sigImg.src = e.target.result;
-                sigOverlay.style.display = 'block';
-                applyBtn.disabled = false;
-                resetSignaturePosition();
+            reader.onload = function(evt) {
+                addSignatureToCanvas(file, evt.target.result);
             }
-            reader.readAsDataURL(e.target.files[0]);
+            reader.readAsDataURL(file);
+            e.target.value = ''; // reset
         }
     });
 
-    // Use Drawn Signature
-    document.getElementById('use-drawn-sig').addEventListener('click', () => {
+    // Add Drawn Signature
+    document.getElementById('add-drawn-sig').addEventListener('click', () => {
         drawCanvas.toBlob((blob) => {
-            currentSignatureFile = new File([blob], "drawn_signature.png", { type: "image/png" });
-            sigImg.src = URL.createObjectURL(blob);
-            sigOverlay.style.display = 'block';
-            applyBtn.disabled = false;
-            resetSignaturePosition();
+            const file = new File([blob], `drawn_sig_${Date.now()}.png`, { type: "image/png" });
+            const dataUrl = URL.createObjectURL(blob);
+            addSignatureToCanvas(file, dataUrl);
+            
+            // clear canvas automatically after adding
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         }, 'image/png');
     });
-
-    function resetSignaturePosition() {
-        sigOverlay.style.transform = 'translate(-50%, -50%)';
-        sigOverlay.setAttribute('data-x', 0);
-        sigOverlay.setAttribute('data-y', 0);
-        sigOverlay.style.width = '150px';
-        sigOverlay.style.height = 'auto';
-    }
 
     // Interact.js for drag and resize
     interact('.draggable-signature')
         .draggable({
             listeners: {
-                start(event) {
-                    console.log(event.type, event.target);
-                },
                 move(event) {
                     const target = event.target;
-                    const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-                    const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                    const x = (parseFloat(target.dataset.x) || 0) + event.dx;
+                    const y = (parseFloat(target.dataset.y) || 0) + event.dy;
 
                     target.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
-                    target.setAttribute('data-x', x);
-                    target.setAttribute('data-y', y);
+                    target.dataset.x = x;
+                    target.dataset.y = y;
                 },
             }
         })
@@ -192,57 +250,98 @@ document.addEventListener('DOMContentLoaded', () => {
             edges: { left: false, right: '.resize-handle', bottom: '.resize-handle', top: false },
             listeners: {
                 move(event) {
-                    let { x, y } = event.target.dataset;
-                    
-                    x = (parseFloat(x) || 0) + event.deltaRect.left;
-                    y = (parseFloat(y) || 0) + event.deltaRect.top;
+                    const target = event.target;
+                    let x = (parseFloat(target.dataset.x) || 0) + event.deltaRect.left;
+                    let y = (parseFloat(target.dataset.y) || 0) + event.deltaRect.top;
 
-                    Object.assign(event.target.style, {
+                    Object.assign(target.style, {
                         width: `${event.rect.width}px`,
                         height: `${event.rect.height}px`,
                         transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`
                     });
 
-                    Object.assign(event.target.dataset, { x, y });
+                    Object.assign(target.dataset, { x, y });
                 }
             }
         });
 
-    // Apply Signature to Backend
+    // Hide/Show signatures based on current page
+    document.getElementById('prev-page').addEventListener('click', updateSignaturesVisibility);
+    document.getElementById('next-page').addEventListener('click', updateSignaturesVisibility);
+    
+    function updateSignaturesVisibility() {
+        document.querySelectorAll('.draggable-signature').forEach(sig => {
+            if (parseInt(sig.dataset.pageNum) === pageNum) {
+                sig.style.display = 'block';
+            } else {
+                sig.style.display = 'none';
+            }
+        });
+    }
+
+    // Apply Signatures to Backend
     applyBtn.addEventListener('click', () => {
+        if (signatureFiles.size === 0) return;
+
         applyBtn.disabled = true;
         applyBtn.textContent = 'Applying...';
 
-        const pdfContainer = document.getElementById('pdf-container');
         const pdfRect = pdfContainer.getBoundingClientRect();
-        const sigRect = sigOverlay.getBoundingClientRect();
-
-        // Calculate position relative to PDF canvas in percentages
-        // Then convert to PDF points using viewport scale
         
-        pdfDoc.getPage(pageNum).then(function(page) {
-            const viewport = page.getViewport({scale: scale});
-            
-            // X, Y from top left of the container
-            const xContainer = sigRect.left - pdfRect.left;
-            const yContainer = sigRect.top - pdfRect.top;
+        const signaturesData = [];
+        const formData = new FormData();
+        formData.append('doc_id', docId);
 
-            // Convert to unscaled PDF points
-            const pdfX = xContainer / scale;
-            // PDF coordinates y is from bottom left
-            const pdfY = (pdfRect.height - yContainer - sigRect.height) / scale; 
-            
-            const pdfWidth = sigRect.width / scale;
-            const pdfHeight = sigRect.height / scale;
+        let promises = [];
 
-            const formData = new FormData();
-            formData.append('doc_id', docId);
-            formData.append('signature_file', currentSignatureFile);
-            formData.append('x', pdfX);
-            formData.append('y', pdfY);
-            formData.append('width', pdfWidth);
-            formData.append('height', pdfHeight);
-            formData.append('page_num', pageNum);
+        // Wait for page info to calculate correct points for all signatures
+        // Actually, we can get viewport for each signature's page
+        document.querySelectorAll('.draggable-signature').forEach(sigOverlay => {
+            const sigId = sigOverlay.id;
+            const sigPageNum = parseInt(sigOverlay.dataset.pageNum);
+            
+            // To properly calculate coordinates, we need the viewport of the page the signature belongs to
+            let promise = pdfDoc.getPage(sigPageNum).then(function(page) {
+                const viewport = page.getViewport({scale: scale});
+                const sigRect = sigOverlay.getBoundingClientRect();
+
+                // If the signature is not on the current page, its bounding rect might be 0,0
+                // We need to briefly show it to get bounds, or calculate from stored styles.
+                // Since it's absolutely positioned in the center with transforms:
+                const width = parseFloat(sigOverlay.style.width) || sigRect.width;
+                const height = parseFloat(sigOverlay.style.height) || sigRect.height;
+                const dx = parseFloat(sigOverlay.dataset.x) || 0;
+                const dy = parseFloat(sigOverlay.dataset.y) || 0;
+                
+                // Calculate center point of container
+                const centerX = pdfRect.width / 2;
+                const centerY = pdfRect.height / 2;
+                
+                // Top left in container
+                const xContainer = centerX + dx - (width / 2);
+                const yContainer = centerY + dy - (height / 2);
+
+                const pdfX = xContainer / scale;
+                const pdfY = (pdfRect.height - yContainer - height) / scale; 
+                const pdfWidth = width / scale;
+                const pdfHeight = height / scale;
+
+                signaturesData.push({
+                    id: sigId,
+                    page_num: sigPageNum,
+                    x: pdfX,
+                    y: pdfY,
+                    width: pdfWidth,
+                    height: pdfHeight
+                });
+
+                formData.append(`file_${sigId}`, signatureFiles.get(sigId));
+            });
+            promises.push(promise);
+        });
+
+        Promise.all(promises).then(() => {
+            formData.append('signatures_data', JSON.stringify(signaturesData));
 
             fetch('/api/apply-signature/', {
                 method: 'POST',
@@ -256,18 +355,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(data.success) {
                     document.getElementById('success-area').style.display = 'block';
                     document.getElementById('download-btn').href = data.signed_url;
-                    applyBtn.textContent = 'Signature Applied';
+                    applyBtn.textContent = 'Signatures Applied';
+                    
+                    // Auto-download the signed PDF using blob fetch
+                    fetch(data.signed_url)
+                        .then(resp => resp.blob())
+                        .then(blob => {
+                            const blobUrl = URL.createObjectURL(blob);
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = blobUrl;
+                            const fileName = data.signed_url.split('/').pop() || 'signed_document.pdf';
+                            downloadLink.download = fileName;
+                            document.body.appendChild(downloadLink);
+                            downloadLink.click();
+                            document.body.removeChild(downloadLink);
+                            URL.revokeObjectURL(blobUrl);
+                        });
+                    
+                    // Hide UI controls
+                    document.querySelectorAll('.delete-sig-btn').forEach(btn => btn.style.display = 'none');
                 } else {
                     alert('Error: ' + data.error);
                     applyBtn.disabled = false;
-                    applyBtn.textContent = 'Apply Signature';
+                    applyBtn.textContent = 'Apply Signatures';
                 }
             })
             .catch(err => {
                 alert('Request failed.');
                 console.error(err);
                 applyBtn.disabled = false;
-                applyBtn.textContent = 'Apply Signature';
+                applyBtn.textContent = 'Apply Signatures';
             });
         });
     });
