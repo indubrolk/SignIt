@@ -29,6 +29,9 @@ DEBUG = os.getenv('DEBUG', 'False').lower() in ('1', 'true', 'yes', 'on')
 allowed_hosts = os.getenv('ALLOWED_HOSTS', '.fly.dev,localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
 
+csrf_trusted_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.fly.dev,https://signit.fly.dev')
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins.split(',') if origin.strip()]
+
 
 # Application definition
 
