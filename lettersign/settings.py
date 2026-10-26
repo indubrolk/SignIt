@@ -26,10 +26,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'dev-insecure-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('1', 'true', 'yes', 'on')
 
-allowed_hosts = os.getenv('ALLOWED_HOSTS', '.fly.dev,localhost,127.0.0.1')
+allowed_hosts = os.getenv('ALLOWED_HOSTS', '.onrender.com,.fly.dev,localhost,127.0.0.1')
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
 
-csrf_trusted_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.fly.dev,https://signit.fly.dev')
+csrf_trusted_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'https://*.onrender.com,https://*.fly.dev,https://signit.fly.dev')
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_trusted_origins.split(',') if origin.strip()]
 
 
