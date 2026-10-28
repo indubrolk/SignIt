@@ -295,6 +295,165 @@ body {
     transform: scale(1.1);
 }
 
+.rotate-sig-btn {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 22px;
+    height: 22px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.rotate-sig-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.15);
+}
+
+.rotate-sig-btn svg {
+    width: 13px;
+    height: 13px;
+    stroke: white;
+}
+
+/* Rotation handle on top center */
+.rotate-handle {
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 16px;
+    cursor: grab;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+}
+
+.rotate-handle:active {
+    cursor: grabbing;
+}
+
+.rotate-handle::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 10px;
+    background: #3b82f6;
+}
+
+.rotate-handle-knob {
+    width: 12px;
+    height: 12px;
+    background: #3b82f6;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.rotate-handle:hover .rotate-handle-knob {
+    transform: scale(1.2);
+    background: var(--primary);
+}
+
+/* Signature Controls in Sidebar */
+.signature-controls {
+    margin-bottom: 0.5rem;
+    padding: 0.85rem;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.control-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+}
+
+.control-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.angle-badge {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(124, 58, 237, 0.2);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(124, 58, 237, 0.35);
+    font-variant-numeric: tabular-nums;
+}
+
+.rotation-btn-group {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+}
+
+.rot-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.45rem 0.4rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.rot-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.rot-btn svg {
+    flex-shrink: 0;
+}
+
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.rotation-slider {
+    width: 100% !important;
+    margin: 0;
+}
+
 /* Drawing Controls */
 .drawing-controls {
     display: flex;

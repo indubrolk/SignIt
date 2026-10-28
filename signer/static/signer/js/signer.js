@@ -162,6 +162,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Signature Management
     const signatureFiles = new Map();
     let sigCounter = 0;
+    let isRotating = false;
+
+    function dataURLtoBlob(dataurl) {
+        const arr = dataurl.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+    }
 
     function clearExistingSignatures() {
         signatureFiles.clear();
@@ -176,6 +189,101 @@ document.addEventListener('DOMContentLoaded', () => {
         if (successArea) {
             successArea.style.display = 'none';
         }
+        const sigControls = document.getElementById('signature-controls');
+        if (sigControls) {
+            sigControls.style.display = 'none';
+        }
+        const angleDisplay = document.getElementById('rotation-angle-display');
+        if (angleDisplay) angleDisplay.textContent = '0°';
+        const slider = document.getElementById('rotation-slider');
+        if (slider) slider.value = 0;
+    }
+
+    function applyRotation(target, angle) {
+        while (angle > 180) angle -= 360;
+        while (angle < -180) angle += 360;
+        target.dataset.angle = angle;
+
+        const angleDisplay = document.getElementById('rotation-angle-display');
+        if (angleDisplay) angleDisplay.textContent = `${angle}°`;
+        const slider = document.getElementById('rotation-slider');
+        if (slider) slider.value = angle;
+
+        const baseImg = target._baseImg;
+        if (!baseImg) return;
+
+        const rad = (angle * Math.PI) / 180;
+        const sin = Math.abs(Math.sin(rad));
+        const cos = Math.abs(Math.cos(rad));
+        const origW = target._origW;
+        const origH = target._origH;
+
+        const rotW = Math.max(1, Math.round(origW * cos + origH * sin));
+        const rotH = Math.max(1, Math.round(origW * sin + origH * cos));
+
+        const offscreen = document.createElement('canvas');
+        offscreen.width = rotW;
+        offscreen.height = rotH;
+        const octx = offscreen.getContext('2d');
+
+        octx.translate(rotW / 2, rotH / 2);
+        octx.rotate(rad);
+        octx.drawImage(baseImg, -origW / 2, -origH / 2);
+
+        const newUrl = offscreen.toDataURL('image/png');
+        const imgEl = target.querySelector('.signature-img');
+        if (imgEl) {
+            imgEl.src = newUrl;
+        }
+
+        const scale = parseFloat(target.dataset.scale) || (150 / origW);
+        const newW = Math.max(20, Math.round(rotW * scale));
+        const newH = Math.max(10, Math.round(rotH * scale));
+
+        target.style.width = `${newW}px`;
+        target.style.height = `${newH}px`;
+
+        const blob = dataURLtoBlob(newUrl);
+        const updatedFile = new File([blob], `signature_${target.id}.png`, { type: 'image/png' });
+        signatureFiles.set(target.id, updatedFile);
+    }
+
+    function initRotateHandle(handle, sigWrapper) {
+        handle.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            isRotating = true;
+            try { handle.setPointerCapture(e.pointerId); } catch(err){}
+
+            const onPointerMove = (moveEvt) => {
+                if (!isRotating) return;
+                const rect = sigWrapper.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const rad = Math.atan2(moveEvt.clientY - centerY, moveEvt.clientX - centerX);
+                let deg = Math.round(rad * (180 / Math.PI) + 90);
+
+                while (deg > 180) deg -= 360;
+                while (deg < -180) deg += 360;
+
+                [-180, -90, 0, 90, 180].forEach(snap => {
+                    if (Math.abs(deg - snap) <= 4) deg = snap;
+                });
+
+                applyRotation(sigWrapper, deg);
+            };
+
+            const onPointerUp = (upEvt) => {
+                if (!isRotating) return;
+                isRotating = false;
+                try { handle.releasePointerCapture(upEvt.pointerId); } catch(err){}
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onPointerUp);
+            };
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+        });
     }
 
     function addSignatureToCanvas(file, dataUrl) {
@@ -187,12 +295,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const sigWrapper = document.createElement('div');
         sigWrapper.className = 'draggable-signature';
         sigWrapper.id = sigId;
-        sigWrapper.dataset.pageNum = pageNum; // Track which page it was placed on
+        sigWrapper.dataset.pageNum = pageNum;
 
         // Initial position
         sigWrapper.style.transform = 'translate(-50%, -50%)';
         sigWrapper.dataset.x = 0;
         sigWrapper.dataset.y = 0;
+        sigWrapper.dataset.angle = 0;
         sigWrapper.style.width = '150px';
         sigWrapper.style.height = 'auto';
 
@@ -200,18 +309,72 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = dataUrl;
         img.className = 'signature-img';
 
+        // Load base image for lossless offscreen rotation
+        const baseImg = new Image();
+        baseImg.onload = () => {
+            sigWrapper._baseImg = baseImg;
+            sigWrapper._origW = baseImg.naturalWidth;
+            sigWrapper._origH = baseImg.naturalHeight;
+
+            const initialWidth = 150;
+            const initialScale = initialWidth / baseImg.naturalWidth;
+            sigWrapper.dataset.scale = initialScale;
+            sigWrapper.dataset.angle = 0;
+
+            const initialHeight = Math.round(baseImg.naturalHeight * initialScale);
+            sigWrapper.style.width = `${initialWidth}px`;
+            sigWrapper.style.height = `${initialHeight}px`;
+
+            const sigControls = document.getElementById('signature-controls');
+            if (sigControls) sigControls.style.display = 'block';
+            const angleDisplay = document.getElementById('rotation-angle-display');
+            if (angleDisplay) angleDisplay.textContent = '0°';
+            const slider = document.getElementById('rotation-slider');
+            if (slider) slider.value = 0;
+        };
+        baseImg.src = dataUrl;
+
         const resizeHandle = document.createElement('div');
         resizeHandle.className = 'resize-handle';
+        resizeHandle.title = 'Drag to resize';
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-sig-btn';
+        deleteBtn.title = 'Remove signature';
         deleteBtn.innerHTML = '&times;';
         deleteBtn.onclick = (e) => {
             e.stopPropagation();
             clearExistingSignatures();
         };
 
+        const rotateBtn = document.createElement('button');
+        rotateBtn.className = 'rotate-sig-btn';
+        rotateBtn.title = 'Rotate 90° Clockwise';
+        rotateBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+            </svg>
+        `;
+        rotateBtn.onclick = (e) => {
+            e.stopPropagation();
+            let currentAngle = parseInt(sigWrapper.dataset.angle) || 0;
+            let newAngle = currentAngle + 90;
+            if (newAngle > 180) newAngle -= 360;
+            applyRotation(sigWrapper, newAngle);
+        };
+
+        const rotateHandle = document.createElement('div');
+        rotateHandle.className = 'rotate-handle';
+        rotateHandle.title = 'Drag to rotate';
+        const rotateKnob = document.createElement('div');
+        rotateKnob.className = 'rotate-handle-knob';
+        rotateHandle.appendChild(rotateKnob);
+        initRotateHandle(rotateHandle, sigWrapper);
+
         sigWrapper.appendChild(deleteBtn);
+        sigWrapper.appendChild(rotateBtn);
+        sigWrapper.appendChild(rotateHandle);
         sigWrapper.appendChild(img);
         sigWrapper.appendChild(resizeHandle);
         pdfContainer.appendChild(sigWrapper);
@@ -221,6 +384,49 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmBtn.textContent = 'Confirm Signature';
         }
         applyBtn.disabled = true;
+    }
+
+    // Sidebar rotation control handlers
+    const rotateCwBtn = document.getElementById('rotate-cw-btn');
+    if (rotateCwBtn) {
+        rotateCwBtn.addEventListener('click', () => {
+            const activeSig = document.querySelector('.draggable-signature');
+            if (!activeSig) return;
+            let currentAngle = parseInt(activeSig.dataset.angle) || 0;
+            let newAngle = currentAngle + 90;
+            if (newAngle > 180) newAngle -= 360;
+            applyRotation(activeSig, newAngle);
+        });
+    }
+
+    const rotateCcwBtn = document.getElementById('rotate-ccw-btn');
+    if (rotateCcwBtn) {
+        rotateCcwBtn.addEventListener('click', () => {
+            const activeSig = document.querySelector('.draggable-signature');
+            if (!activeSig) return;
+            let currentAngle = parseInt(activeSig.dataset.angle) || 0;
+            let newAngle = currentAngle - 90;
+            if (newAngle < -180) newAngle += 360;
+            applyRotation(activeSig, newAngle);
+        });
+    }
+
+    const rotateResetBtn = document.getElementById('rotate-reset-btn');
+    if (rotateResetBtn) {
+        rotateResetBtn.addEventListener('click', () => {
+            const activeSig = document.querySelector('.draggable-signature');
+            if (!activeSig) return;
+            applyRotation(activeSig, 0);
+        });
+    }
+
+    const rotationSlider = document.getElementById('rotation-slider');
+    if (rotationSlider) {
+        rotationSlider.addEventListener('input', (e) => {
+            const activeSig = document.querySelector('.draggable-signature');
+            if (!activeSig) return;
+            applyRotation(activeSig, parseInt(e.target.value) || 0);
+        });
     }
 
     // Upload PNG Logic
@@ -243,14 +449,17 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.draggable-signature').forEach(sig => {
                 interact(sig).draggable(false).resizable(false);
                 const resize = sig.querySelector('.resize-handle');
-                if (resize) {
-                    resize.style.display = 'none';
-                }
+                if (resize) resize.style.display = 'none';
                 const del = sig.querySelector('.delete-sig-btn');
-                if (del) {
-                    del.style.display = 'none';
-                }
+                if (del) del.style.display = 'none';
+                const rot = sig.querySelector('.rotate-sig-btn');
+                if (rot) rot.style.display = 'none';
+                const rotHandle = sig.querySelector('.rotate-handle');
+                if (rotHandle) rotHandle.style.display = 'none';
             });
+
+            const sigControls = document.getElementById('signature-controls');
+            if (sigControls) sigControls.style.display = 'none';
 
             confirmBtn.textContent = 'Confirmed';
             confirmBtn.disabled = true;
@@ -273,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Interact.js for drag and resize
     interact('.draggable-signature')
         .draggable({
+            ignoreFrom: '.delete-sig-btn, .rotate-sig-btn, .rotate-handle, .resize-handle',
             listeners: {
                 move(event) {
                     const target = event.target;
@@ -305,6 +515,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     Object.assign(target.dataset, { x, y });
+
+                    const angle = parseFloat(target.dataset.angle) || 0;
+                    const rad = (angle * Math.PI) / 180;
+                    const origW = target._origW;
+                    const origH = target._origH;
+                    if (origW && origH) {
+                        const cos = Math.abs(Math.cos(rad));
+                        const sin = Math.abs(Math.sin(rad));
+                        const currentRotatedW = origW * cos + origH * sin;
+                        target.dataset.scale = event.rect.width / currentRotatedW;
+                    }
                 }
             }
         });

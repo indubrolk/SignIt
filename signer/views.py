@@ -8,7 +8,7 @@ from django.core.files.base import ContentFile
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .models import Document, Signature
 from .forms import DocumentUploadForm
@@ -33,7 +33,9 @@ def remove_signature_background(image_file, threshold=200):
     Converts light pixels (above threshold brightness) to transparent.
     Returns a ContentFile containing the processed PNG with transparency.
     """
-    img = Image.open(image_file).convert('RGBA')
+    img = Image.open(image_file)
+    img = ImageOps.exif_transpose(img)
+    img = img.convert('RGBA')
     data = np.array(img)
 
     # Calculate brightness from RGB channels
